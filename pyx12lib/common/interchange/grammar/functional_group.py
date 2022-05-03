@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
 from pyx12lib.core.grammar import Element
 from pyx12lib.core.grammar.segment import USAGE_MANDATORY, BaseSegment
 

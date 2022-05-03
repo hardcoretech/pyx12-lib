@@ -1,9 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
 import collections
 import copy
-from builtins import object, zip
 
 import six
 

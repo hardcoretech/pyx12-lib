@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, unicode_literals
-
-from builtins import str
-
 from pyx12lib.core.renderer import SegmentRenderer
 
 from .grammar import SeSegment, StSegment
