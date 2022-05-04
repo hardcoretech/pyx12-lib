@@ -4,10 +4,9 @@ import copy
 import six
 
 from pyx12lib.core import exceptions
+from pyx12lib.core.base import RenderedElement, RenderedSegment, RenderedComponent, RenderedCompositeElement
 from pyx12lib.core.grammar.element import (
     COMPONENT_DELIMITER,
-    ELEMENT_TYPE_DECIMAL,
-    ELEMENT_TYPE_NUMERIC,
     NotUsedElement,
 )
 from pyx12lib.core.grammar.segment import (
@@ -44,7 +43,7 @@ class SegmentRenderer(BaseSegmentRenderer):
     grammar = None
     element_value_getters = None
 
-    _element_values = None
+    _rendered_segment = None
 
     def __init__(self, data, **kwargs):
         super(SegmentRenderer, self).__init__(**kwargs)
@@ -56,138 +55,63 @@ class SegmentRenderer(BaseSegmentRenderer):
             raise NotImplementedError('element_value_getters should be defined.')
         return self.element_value_getters.get(ref_des, NotUsedElement.value_getter)
 
-    @staticmethod
-    def _is_element_valid(element, value):
-        # Skip NotUsedElement
-        if isinstance(element, NotUsedElement):
-            if value != '':
-                raise exceptions.NotUsedElementException(element, value)
-            return True
-
-        # Check string type
-        if not isinstance(value, six.string_types):
-            raise exceptions.NotStringException(element, value)
-
-        # Check mandatory
-        if element.usage == USAGE_MANDATORY and value == '':
-            raise exceptions.MandatoryElementException(element, value)
-
-        if value != '':
-            # Check width
-            if not (element.minimum <= len(value) <= element.maximum):
-                raise exceptions.LengthException(element, value)
-
-            # Check type
-            if element.type == ELEMENT_TYPE_DECIMAL or element.type.startswith(ELEMENT_TYPE_NUMERIC):
-                try:
-                    float(value)
-                except ValueError:
-                    raise exceptions.NotDecimalError(element, value)
-
-            if element.type.startswith(ELEMENT_TYPE_NUMERIC):
-                decimal_places = int(element.type[1])
-                try:
-                    if len(value.split('.')[1]) != decimal_places:
-                        raise exceptions.DecimalPlaceNotMatchError(element, value)
-                except IndexError:
-                    if decimal_places > 0:
-                        raise exceptions.DecimalPlaceNotMatchError(element, value)
-
-        return True
-
-    def is_valid(self):
-        # Check empty segment
-        if not any(self._element_values.values()):
-            if self.grammar.usage == USAGE_MANDATORY:
-                raise exceptions.MandatorySegmentException(self.grammar)
-            if self.grammar.usage in (USAGE_OPTIONAL, USAGE_CONDITIONAL):
-                return True
-
-        # Check each elements
-        return all(
-            self._is_element_valid(ele, self._element_values[ele.reference_designator]) for ele in self.grammar.elements
-        )
+    def _get_rendered_segment(self):
+        if self._rendered_segment is None:
+            self.build()
+        return self._rendered_segment
 
     def count(self):
-        return 1 if any(self._element_values.values()) else 0
+        return 1 if not self._get_rendered_segment().is_empty() else 0
 
     def build(self):
-        self._element_values = collections.OrderedDict()
+        render_stat = collections.OrderedDict()
 
+        elements = []
         for ele in self.grammar.elements:
-            ref_des = ele.reference_designator
-            value_getter = self.get_element_value_getter(ref_des)
-            self._element_values[ref_des] = value_getter(ele, self._data, self._element_values)
+            value = self.get_element_value_getter(ele.reference_designator)(ele, self._data, render_stat)
+            render_stat[ele.reference_designator] = value
+            elements.append(RenderedElement(ele=ele, value=value))
 
-        return self._element_values
-
-    def render(self):
-        ele_values_dict = self._element_values if self._element_values is not None else self.build()
-
-        self.is_valid()
-
-        if not any(ele_values_dict.values()):
-            return ''
-
-        ele_values_list = list(ele_values_dict.values())
-        ele_values_list.insert(0, self.grammar.segment_id)
-        segment_value = (
-            self._element_delimiter.join(ele_values_list).rstrip(self._element_delimiter) + self._segment_terminator
+        self._rendered_segment = RenderedSegment(
+            grammar=self.grammar,
+            elements=elements,
+            segment_terminator=self._segment_terminator,
+            element_delimiter=self._element_delimiter,
         )
 
-        return segment_value
+    def render(self):
+        rendered_segment = self._get_rendered_segment()
+
+        rendered_segment.is_valid()
+
+        if rendered_segment.is_empty():
+            return ''
+
+        return rendered_segment.to_string()
 
 
 class ComponentSegmentRenderer(SegmentRenderer):
-    def is_composite_element_valid(self, element, comp_values_tuple):
-        # Check empty composite element
-        if not any(val for ele, val in comp_values_tuple):
-            if element.usage == USAGE_MANDATORY:
-                raise exceptions.MandatoryCompositeElementException(element)
-            if element.usage in (USAGE_OPTIONAL, USAGE_CONDITIONAL):
-                return True
-
-        # Check each components
-        return all(self.is_component_valid(element, value) for element, value in comp_values_tuple)
-
-    @staticmethod
-    def is_component_valid(component, value):
-        # Skip NotUsedElement
-        if isinstance(component, NotUsedElement):
-            if value != '':
-                raise exceptions.NotUsedElementException(component, value)
-            return True
-
-        # Check data type
-        if not isinstance(value, six.string_types):
-            raise exceptions.NotStringException(component, value)
-
-        # Check mandatory
-        if component.usage == USAGE_MANDATORY and value == '':
-            raise exceptions.MandatoryComponentException(component, value)
-
-        if value != '':
-            # Check width
-            if not (component.minimum <= len(value) <= component.maximum):
-                raise exceptions.LengthException(component, value)
-
-        return True
-
     def get_component_values(self, ele, data, stat, value_getters):
         local_stat = copy.deepcopy(stat)
 
         comp_values = {}
+        components = []
         for comp in ele.components:
-            ref_des = comp.reference_designator
-            value_getter = value_getters.get(ref_des, NotUsedElement.value_getter)
-            comp_values[ref_des] = value_getter(comp, data, local_stat)
+            value = value_getters.get(comp.reference_designator, NotUsedElement.value_getter)(comp, data, local_stat)
+            comp_values[comp.reference_designator] = value
+            components.append(RenderedComponent(component=comp, value=value))
 
             local_stat.update(comp_values)
 
-        comp_values_list = [comp_values[comp.reference_designator] for comp in ele.components]
-        self.is_composite_element_valid(ele, list(zip(ele.components, comp_values_list)))
+        composite_ele = RenderedCompositeElement(
+            composite_ele=ele,
+            components=components,
+            component_delimiter=self._component_delimiter,
+        )
 
-        return self._component_delimiter.join(comp_values_list).rstrip(self._component_delimiter)
+        composite_ele.is_valid()
+
+        return composite_ele.to_string()
 
 
 class SegmentRendererLoop(BaseSegmentRenderer):
