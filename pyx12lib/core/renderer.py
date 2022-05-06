@@ -1,9 +1,6 @@
 import collections
 import copy
 
-import six
-
-from pyx12lib.core import exceptions
 from pyx12lib.core.base import RenderedElement, RenderedSegment, RenderedComponent, RenderedCompositeElement
 from pyx12lib.core.grammar.element import (
     COMPONENT_DELIMITER,
@@ -11,14 +8,8 @@ from pyx12lib.core.grammar.element import (
 )
 from pyx12lib.core.grammar.segment import (
     ELEMENT_DELIMITER,
-    SEGMENT_TERMINATOR,
-    USAGE_CONDITIONAL,
-    USAGE_MANDATORY,
-    USAGE_OPTIONAL,
+    SEGMENT_TERMINATOR
 )
-
-WEIGHT_MAX_DIGITS = 3
-MEASURE_MAX_DIGITS = 4
 
 
 class BaseSegmentRenderer(object):
