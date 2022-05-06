@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
-from builtins import object
-
 ELEMENT_DELIMITER = '*'
 SEGMENT_TERMINATOR = '~'
 

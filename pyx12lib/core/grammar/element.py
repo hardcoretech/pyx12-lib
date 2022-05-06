@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
-from builtins import object
-
 COMPONENT_DELIMITER = '^'
 
 USAGE_MANDATORY = 'M'
@@ -15,6 +10,7 @@ ELEMENT_TYPE_DATE = 'DT'
 ELEMENT_TYPE_TIME = 'TM'
 ELEMENT_TYPE_NUMERIC = 'N'
 ELEMENT_TYPE_DECIMAL = 'R'
+ELEMENT_TYPE_COMPOSITE = ''
 
 
 def get_numeric_type(max_digits):
