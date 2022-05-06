@@ -90,7 +90,7 @@ class SegmentRenderer(BaseSegmentRenderer):
         return rendered_segment.to_string()
 
 
-class ComponentSegmentRenderer(SegmentRenderer):
+class CompositeElementRenderer(SegmentRenderer):
     def get_component_values(self, ele, data, stat, value_getters):
         local_stat = copy.deepcopy(stat)
 

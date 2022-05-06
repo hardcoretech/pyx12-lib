@@ -2,7 +2,7 @@ from unittest import TestCase
 
 from pyx12lib.core import exceptions
 from pyx12lib.core.grammar import BaseSegment, Element, NotUsedElement, element, segment, CompositeElement, Component
-from pyx12lib.core.renderer import ComponentSegmentRenderer, SegmentRenderer
+from pyx12lib.core.renderer import CompositeElementRenderer, SegmentRenderer
 
 
 class _TestCompositeSegment(BaseSegment):
@@ -56,12 +56,12 @@ class _TestCompositeSegment(BaseSegment):
     )
 
 
-class TestComponentSegmentRenderer(TestCase):
+class TestCompositeElementRenderer(TestCase):
     def test_test_mandatory_composite_element_raises_error(self):
         # arrange
         data = {}
 
-        class _TestComponentSegmentRenderer(ComponentSegmentRenderer):
+        class _TestCompositeElementRenderer(CompositeElementRenderer):
             grammar = _TestCompositeSegment
 
             @property
@@ -79,7 +79,7 @@ class TestComponentSegmentRenderer(TestCase):
                 return self.get_component_values(ele, data, stat, value_getters)
 
         # action & assert
-        renderer = _TestComponentSegmentRenderer(data)
+        renderer = _TestCompositeElementRenderer(data)
         with self.assertRaises(exceptions.MandatoryComponentException):
             renderer.render()
 
@@ -87,7 +87,7 @@ class TestComponentSegmentRenderer(TestCase):
         # arrange
         data = {}
 
-        class _TestComponentSegmentRenderer(ComponentSegmentRenderer):
+        class _TestCompositeElementRenderer(CompositeElementRenderer):
             grammar = _TestCompositeSegment
 
             @property
@@ -105,7 +105,7 @@ class TestComponentSegmentRenderer(TestCase):
                 return self.get_component_values(ele, data, stat, value_getters)
 
         # action & assert
-        renderer = _TestComponentSegmentRenderer(data)
+        renderer = _TestCompositeElementRenderer(data)
         with self.assertRaises(exceptions.MandatoryCompositeElementException):
             renderer.render()
 
@@ -118,7 +118,7 @@ class TestComponentSegmentRenderer(TestCase):
             "test_data_composite": ['A', 'BCD'],
         }
 
-        class _TestComponentSegmentRenderer(ComponentSegmentRenderer):
+        class _TestCompositeElementRenderer(CompositeElementRenderer):
             grammar = _TestCompositeSegment
 
             @property
@@ -137,7 +137,7 @@ class TestComponentSegmentRenderer(TestCase):
                 return self.get_component_values(ele, data, stat, value_getters)
 
         # action
-        renderer = _TestComponentSegmentRenderer(data)
+        renderer = _TestCompositeElementRenderer(data)
         result = renderer.render()
 
         # assert
