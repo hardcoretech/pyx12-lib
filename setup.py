@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="pyx12lib",
-    version="0.2",
+    version="0.3",
     author="CJHwong",
     author_email="pypi@hardcoretech.co",
     url="https://github.com/hardcoretech/pyx12-lib",

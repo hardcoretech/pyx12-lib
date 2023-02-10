@@ -1,6 +1,13 @@
 Changelog
 =========
 
+0.3
+-----
+
+Changes:
+
+- Rename common module `interchange` to `envelop` for fitting X12's language.
+
 0.2
 -----
 
