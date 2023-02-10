@@ -13,7 +13,6 @@ setuptools.setup(
     package_dir={"pyx12lib": "pyx12lib"},
     packages=setuptools.find_packages(),
     install_requires=[
-        "python-dateutil",
         "six",
     ],
     python_requires=">=3.6",

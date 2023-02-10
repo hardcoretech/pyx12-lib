@@ -35,7 +35,7 @@ class StSegment(BaseSegment):
 ```
 * Render the segment from its grammar.
 ```python
-from pyx12lib.common.interchange.grammar import StSegment
+from pyx12lib.common.envelope.grammar import StSegment
 from pyx12lib.core.renderer import SegmentRenderer
 
 
@@ -49,7 +49,7 @@ class StRenderer(SegmentRenderer):
 ```
 * Advanced definition for element value getters
 ```python
-from pyx12lib.common.interchange.grammar import StSegment
+from pyx12lib.common.envelope.grammar import StSegment
 from pyx12lib.core.renderer import SegmentRenderer
 
 
