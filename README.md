@@ -70,6 +70,76 @@ class StRenderer(SegmentRenderer):
         return '{:04d}'.format(data.transaction_set_no)  # return value should always be strings
 ```
 
+### Parsing X12 to JSON
+
+* Quick parse using the top-level API.
+```python
+from pyx12lib import parse_x12, parse_x12_to_json
+
+x12_data = "ST*997*0001~SE*1*0001~"
+
+# Parse to Python dict
+data = parse_x12(x12_data)
+# {'segments': [{'segment_id': 'ST', 'elements': [...]}, ...]}
+
+# Parse to JSON string
+json_str = parse_x12_to_json(x12_data)
+```
+
+* Parse a single segment with explicit grammar.
+```python
+from pyx12lib.core.parser import SegmentParser
+from pyx12lib.common.envelope.grammar import StSegment
+
+parser = SegmentParser("ST*997*0001~", grammar=StSegment)
+result = parser.to_dict()
+# {'segment_id': 'ST', 'elements': [
+#     {'reference_designator': 'ST01', 'name': 'Transaction Set Identifier Code', 'value': '997', ...},
+#     {'reference_designator': 'ST02', 'name': 'Transaction Set Control Number', 'value': '0001', ...},
+# ]}
+```
+
+* Register custom segment grammars for parsing.
+```python
+from pyx12lib import GrammarRegistry, X12Parser
+from pyx12lib.core.grammar import BaseSegment, Element, element, segment
+
+class MySegment(BaseSegment):
+    segment_id = 'MY'
+    usage = segment.USAGE_MANDATORY
+    max_use = 1
+    elements = (
+        Element(
+            reference_designator='MY01',
+            name='My Field',
+            usage=element.USAGE_MANDATORY,
+            element_type=element.ELEMENT_TYPE_STRING,
+            minimum=1,
+            maximum=10,
+        ),
+    )
+
+registry = GrammarRegistry()
+registry.register(MySegment)
+
+parser = X12Parser("MY*hello~MY*world~", registry=registry)
+data = parser.to_dict()
+```
+
+* Auto-detect delimiters from ISA header.
+```python
+from pyx12lib import parse_x12
+
+# Delimiters are automatically detected from the ISA segment
+x12_data = (
+    "ISA*00*          *00*          *ZZ*SENDER         "
+    "*ZZ*RECEIVER       *210101*1200*^*00501*000000001*0*P*>~"
+    "GS*FA*SENDER*RECEIVER*20210101*1200*1*X*005010~"
+    "ST*997*0001~SE*1*0001~GE*1*1~IEA*1*000000001~"
+)
+data = parse_x12(x12_data)
+```
+
 ---
 ## Test
 ```bash
