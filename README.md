@@ -122,8 +122,8 @@ class MySegment(BaseSegment):
 registry = GrammarRegistry()
 registry.register(MySegment)
 
-parser = X12Parser("MY*hello~MY*world~", registry=registry)
-data = parser.to_dict()
+parser = X12Parser(registry=registry)
+data = parser.parse("MY*hello~MY*world~").to_dict()
 ```
 
 * Parse with loop definitions to group related segments.
@@ -154,8 +154,8 @@ class N2Segment(BaseSegment):
 registry = GrammarRegistry()
 registry.register_loop(LoopDefinition(N1Segment, [N2Segment]))
 
-parser = X12Parser("N1*CA~N1*SH~N2*ACME CORP~N1*CN~", registry=registry)
-data = parser.to_dict()
+parser = X12Parser(registry=registry)
+data = parser.parse("N1*CA~N1*SH~N2*ACME CORP~N1*CN~").to_dict()
 # {'segments': [
 #     {'loop_id': 'N1', 'segments': [{'segment_id': 'N1', 'elements': [...]}]},
 #     {'loop_id': 'N1', 'segments': [

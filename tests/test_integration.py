@@ -3,8 +3,7 @@ import time
 from unittest import TestCase
 
 from pyx12lib import parse_x12, parse_x12_to_json
-from pyx12lib.core.parser import SegmentParser, X12Parser
-from pyx12lib.core.registry import create_default_registry
+from pyx12lib.core.parser import SegmentParser
 
 
 class TestIntegrationFullEnvelope(TestCase):

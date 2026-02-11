@@ -1,10 +1,11 @@
 import json
+from typing import Iterable
 
 from pyx12lib.core.grammar.element import (
-    NotUsedElement,
     USAGE_MANDATORY,
     ELEMENT_TYPE_DECIMAL,
     ELEMENT_TYPE_NUMERIC,
+    CompositeElement,
 )
 
 
@@ -69,7 +70,7 @@ class ParsedComponent(ParsedElement):
 class ParsedCompositeElement:
     """Represents a parsed composite element containing components."""
 
-    def __init__(self, grammar, components):
+    def __init__(self, grammar: CompositeElement, components: Iterable[ParsedComponent]) -> None:
         self._grammar = grammar
         self._components = components
 

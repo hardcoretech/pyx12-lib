@@ -1,5 +1,5 @@
 from pyx12lib.core.grammar.loop import LoopDefinition
-from pyx12lib.core.parser import SegmentParser, X12Parser
+from pyx12lib.core.parser import SegmentParser, X12Parser, X12ParseResult
 from pyx12lib.core.registry import GrammarRegistry, create_default_registry
 from pyx12lib.core.delimiters import detect_delimiters, Delimiters
 
@@ -15,11 +15,11 @@ def parse_x12(x12_string, registry=None):
     Returns:
         Dict with 'segments' key containing list of parsed segment dicts.
     """
-    parser = X12Parser(x12_string, registry=registry)
-    return parser.to_dict()
+    parser = X12Parser(registry=registry)
+    return parser.parse(x12_string).to_dict()
 
 
-def parse_x12_to_json(x12_string, indent=2, registry=None):
+def parse_x12_to_json(x12_string, indent=None, registry=None):
     """Parse an X12 string into a JSON string.
 
     Args:
@@ -31,5 +31,5 @@ def parse_x12_to_json(x12_string, indent=2, registry=None):
     Returns:
         JSON string representation of the parsed X12 data.
     """
-    parser = X12Parser(x12_string, registry=registry)
-    return parser.to_json(indent=indent)
+    parser = X12Parser(registry=registry)
+    return parser.parse(x12_string).to_json(indent=indent)

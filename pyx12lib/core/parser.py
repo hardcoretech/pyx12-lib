@@ -31,7 +31,7 @@ class BaseSegmentParser(object):
         self._element_delimiter = element_delimiter
         self._component_delimiter = component_delimiter
 
-    def parse(self):
+    def parse(self, x12_string: str):
         raise NotImplementedError
 
 
@@ -100,8 +100,27 @@ class SegmentParser(BaseSegmentParser):
         return self.parse().to_json(indent=indent)
 
 
+class X12ParseResult(object):
+    """Result of parsing an X12 string."""
+
+    def __init__(self, segments):
+        self._segments = segments
+
+    @property
+    def segments(self):
+        return self._segments
+
+    def to_dict(self):
+        return {
+            'segments': [s.to_dict() for s in self._segments],
+        }
+
+    def to_json(self, indent=None):
+        return json.dumps(self.to_dict(), indent=indent)
+
+
 class X12Parser(BaseSegmentParser):
-    """Parse a complete X12 string containing multiple segments.
+    """Parse complete X12 strings containing multiple segments.
 
     Uses a GrammarRegistry to auto-detect segment types by their ID.
     Unknown segments (not in the registry) are skipped.
@@ -110,57 +129,71 @@ class X12Parser(BaseSegmentParser):
     delimiters are automatically detected from the ISA header.
     """
 
-    def __init__(self, x12_string, registry=None, auto_detect_delimiters=True, **kwargs):
-        self._x12_string = x12_string
-
-        if auto_detect_delimiters and x12_string.lstrip().startswith('ISA'):
-            detected = detect_delimiters(x12_string)
-            kwargs.setdefault('segment_terminator', detected.segment_terminator)
-            kwargs.setdefault('element_delimiter', detected.element_delimiter)
-            kwargs.setdefault('component_delimiter', detected.component_delimiter)
-
+    def __init__(self, registry=None, auto_detect_delimiters=True, **kwargs):
         super(X12Parser, self).__init__(**kwargs)
 
         if registry is None:
             registry = create_default_registry()
         self._registry = registry
-        self._parsed_segments = None
+        self._auto_detect_delimiters = auto_detect_delimiters
 
-    def parse(self):
-        if self._parsed_segments is not None:
-            return self._parsed_segments
+    def parse(self, x12_string):
+        segment_terminator = self._segment_terminator
+        element_delimiter = self._element_delimiter
+        component_delimiter = self._component_delimiter
+
+        if self._auto_detect_delimiters and x12_string.lstrip().startswith('ISA'):
+            detected = detect_delimiters(x12_string)
+            segment_terminator = detected.segment_terminator
+            element_delimiter = detected.element_delimiter
+            component_delimiter = detected.component_delimiter
 
         flat_segments = []
-        raw_segments = self._x12_string.split(self._segment_terminator)
+        raw_segments = x12_string.split(segment_terminator)
 
         for raw in raw_segments:
             raw = raw.strip()
             if not raw:
                 continue
 
-            segment_id = raw.split(self._element_delimiter)[0]
+            segment_id = raw.split(element_delimiter)[0]
             grammar = self._registry.get(segment_id)
             if grammar is None:
                 continue
 
             parser = SegmentParser(
-                raw + self._segment_terminator,
+                raw + segment_terminator,
                 grammar=grammar,
-                segment_terminator=self._segment_terminator,
-                element_delimiter=self._element_delimiter,
-                component_delimiter=self._component_delimiter,
+                segment_terminator=segment_terminator,
+                element_delimiter=element_delimiter,
+                component_delimiter=component_delimiter,
             )
             flat_segments.append(parser.parse())
 
         if self._registry.has_loops:
-            self._parsed_segments = self._organize_into_loops(flat_segments)
+            segments = self._organize_into_loops(flat_segments)
         else:
-            self._parsed_segments = flat_segments
+            segments = flat_segments
 
-        return self._parsed_segments
+        return X12ParseResult(segments)
 
     def _organize_into_loops(self, flat_segments):
-        """Group flat segments into ParsedLoop objects based on registry loop definitions."""
+        """Group flat segments into ParsedLoop objects based on registry loop definitions.
+
+        Single O(n) pass. Maintains two pieces of state:
+        - current_loop: the ParsedLoop being built (None when not inside a loop)
+        - current_loop_def: the LoopDefinition that governs valid children
+
+        For each segment, exactly one of three cases applies:
+        1. Segment starts a new loop (its ID matches a registered LoopDefinition).
+        2. Segment is a child of the currently open loop.
+        3. Segment is unrelated — emitted flat, closing any open loop first.
+
+        Examples (N1 loop with N2 child):
+          [A, N1, N2, B]       → [A, Loop(N1,N2), B]
+          [N1*CA, N1*SH, N2]   → [Loop(N1*CA), Loop(N1*SH, N2)]
+          [N2, N1, N2]         → [N2, Loop(N1, N2)]   (orphan N2 emitted flat)
+        """
         result = []
         current_loop = None
         current_loop_def = None
@@ -170,32 +203,34 @@ class X12Parser(BaseSegmentParser):
             loop_def = self._registry.get_loop(seg_id)
 
             if loop_def is not None:
-                # This segment starts a new loop.
+                # Case 1: This segment starts a new loop.
+                # Finalize the previous loop if one is open, then start fresh.
+                # This also handles consecutive starts (e.g. N1*CA then N1*SH)
+                # — each start closes the prior loop.
                 if current_loop is not None:
                     result.append(current_loop)
                 current_loop = ParsedLoop(loop_id=loop_def.loop_id)
                 current_loop.add_segment(segment)
                 current_loop_def = loop_def
 
-            elif current_loop is not None and current_loop_def.is_child(seg_id):
+            elif current_loop is not None and current_loop_def is not None and current_loop_def.is_child(seg_id):
+                # Case 2: Segment belongs to the currently open loop.
+                # is_child() checks against the LoopDefinition's child_segment_ids
+                # (direct children only, not nested loop members).
                 current_loop.add_segment(segment)
 
             else:
+                # Case 3: Segment is not a loop start and not a child.
+                # If a loop is open, it's terminated by this unrelated segment.
+                # The segment itself is emitted as a flat ParsedSegment.
                 if current_loop is not None:
                     result.append(current_loop)
                     current_loop = None
                     current_loop_def = None
                 result.append(segment)
 
+        # Flush any loop still open after the last segment.
         if current_loop is not None:
             result.append(current_loop)
 
         return result
-
-    def to_dict(self):
-        return {
-            'segments': [s.to_dict() for s in self.parse()],
-        }
-
-    def to_json(self, indent=2):
-        return json.dumps(self.to_dict(), indent=indent)

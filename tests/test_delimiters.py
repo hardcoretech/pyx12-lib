@@ -128,8 +128,8 @@ class TestX12ParserWithAutoDetection(TestCase):
             "IEA*1*000000001~"
         )
 
-        parser = X12Parser(x12_string)
-        result = parser.to_dict()
+        parser = X12Parser()
+        result = parser.parse(x12_string).to_dict()
 
         self.assertEqual(len(result['segments']), 6)
 
@@ -138,8 +138,8 @@ class TestX12ParserWithAutoDetection(TestCase):
 
         x12_string = "ST*997*0001~SE*1*0001~"
 
-        parser = X12Parser(x12_string, auto_detect_delimiters=False)
-        result = parser.to_dict()
+        parser = X12Parser(auto_detect_delimiters=False)
+        result = parser.parse(x12_string).to_dict()
 
         self.assertEqual(len(result['segments']), 2)
 
@@ -149,7 +149,7 @@ class TestX12ParserWithAutoDetection(TestCase):
         # No ISA present, auto_detect=True but should use defaults gracefully
         x12_string = "ST*997*0001~SE*1*0001~"
 
-        parser = X12Parser(x12_string, auto_detect_delimiters=True)
-        result = parser.to_dict()
+        parser = X12Parser(auto_detect_delimiters=True)
+        result = parser.parse(x12_string).to_dict()
 
         self.assertEqual(len(result['segments']), 2)

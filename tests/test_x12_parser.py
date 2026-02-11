@@ -4,7 +4,7 @@ from unittest import TestCase
 from pyx12lib.core.grammar import BaseSegment, Element, element, segment
 from pyx12lib.core.grammar.loop import LoopDefinition
 from pyx12lib.core.parsed import ParsedLoop, ParsedSegment
-from pyx12lib.core.parser import X12Parser
+from pyx12lib.core.parser import X12Parser, X12ParseResult
 from pyx12lib.core.registry import GrammarRegistry, create_default_registry
 
 
@@ -142,8 +142,8 @@ class TestX12Parser(TestCase):
         x12_string = "ST*997*0001~SE*1*0001~"
 
         # action
-        parser = X12Parser(x12_string)
-        result = parser.to_dict()
+        parser = X12Parser()
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 2)
@@ -163,8 +163,8 @@ class TestX12Parser(TestCase):
         )
 
         # action
-        parser = X12Parser(x12_string)
-        result = parser.to_dict()
+        parser = X12Parser()
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 6)
@@ -176,8 +176,8 @@ class TestX12Parser(TestCase):
         x12_string = "ST*997*0001~BOGUS*DATA~SE*1*0001~"
 
         # action
-        parser = X12Parser(x12_string)
-        result = parser.to_dict()
+        parser = X12Parser()
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 2)
@@ -191,8 +191,8 @@ class TestX12Parser(TestCase):
         x12_string = "CUS*hello~CUS*world~"
 
         # action
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.to_dict()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 2)
@@ -204,8 +204,8 @@ class TestX12Parser(TestCase):
         x12_string = "ST*997*0001~SE*1*0001~"
 
         # action
-        parser = X12Parser(x12_string)
-        json_output = parser.to_json()
+        parser = X12Parser()
+        json_output = parser.parse(x12_string).to_json()
 
         # assert
         data = json.loads(json_output)
@@ -217,8 +217,8 @@ class TestX12Parser(TestCase):
         x12_string = ""
 
         # action
-        parser = X12Parser(x12_string)
-        result = parser.to_dict()
+        parser = X12Parser()
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 0)
@@ -228,31 +228,43 @@ class TestX12Parser(TestCase):
         x12_string = "  \n  \n  "
 
         # action
-        parser = X12Parser(x12_string)
-        result = parser.to_dict()
+        parser = X12Parser()
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 0)
 
-    def test_parse_caches_result(self):
+    def test_parse_returns_x12_parse_result(self):
         # arrange
         x12_string = "ST*997*0001~SE*1*0001~"
 
         # action
-        parser = X12Parser(x12_string)
-        result1 = parser.parse()
-        result2 = parser.parse()
+        parser = X12Parser()
+        result = parser.parse(x12_string)
 
         # assert
-        self.assertIs(result1, result2)
+        self.assertIsInstance(result, X12ParseResult)
+        self.assertEqual(len(result.segments), 2)
+
+    def test_parser_is_reusable(self):
+        # arrange
+        parser = X12Parser()
+
+        # action
+        result1 = parser.parse("ST*997*0001~SE*1*0001~")
+        result2 = parser.parse("ST*997*0002~")
+
+        # assert
+        self.assertEqual(len(result1.segments), 2)
+        self.assertEqual(len(result2.segments), 1)
 
     def test_newline_separated_segments(self):
         # arrange: segments separated by newlines
         x12_string = "ST*997*0001~\nSE*1*0001~\n"
 
         # action
-        parser = X12Parser(x12_string)
-        result = parser.to_dict()
+        parser = X12Parser()
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 2)
@@ -264,8 +276,8 @@ class TestX12Parser(TestCase):
         x12_string = "ST*997*0001~CUS*test~SE*1*0001~"
 
         # action
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.to_dict()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string).to_dict()
 
         # assert
         self.assertEqual(len(result['segments']), 3)
@@ -291,12 +303,12 @@ class TestX12ParserWithLoops(TestCase):
         registry.register_all([_SegA, _SegB])
         x12_string = "A*x~B*y~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.parse()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string)
 
-        self.assertEqual(len(result), 2)
-        self.assertIsInstance(result[0], ParsedSegment)
-        self.assertIsInstance(result[1], ParsedSegment)
+        self.assertEqual(len(result.segments), 2)
+        self.assertIsInstance(result.segments[0], ParsedSegment)
+        self.assertIsInstance(result.segments[1], ParsedSegment)
 
     def test_single_loop_start_no_children(self):
         # [A, N1, B] → [A, Loop(N1), B]
@@ -306,15 +318,15 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "A*x~N1*CA~B*y~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.parse()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string)
 
-        self.assertEqual(len(result), 3)
-        self.assertIsInstance(result[0], ParsedSegment)
-        self.assertIsInstance(result[1], ParsedLoop)
-        self.assertEqual(result[1].loop_id, "N1")
-        self.assertEqual(len(result[1].segments), 1)
-        self.assertIsInstance(result[2], ParsedSegment)
+        self.assertEqual(len(result.segments), 3)
+        self.assertIsInstance(result.segments[0], ParsedSegment)
+        self.assertIsInstance(result.segments[1], ParsedLoop)
+        self.assertEqual(result.segments[1].loop_id, "N1")
+        self.assertEqual(len(result.segments[1].segments), 1)
+        self.assertIsInstance(result.segments[2], ParsedSegment)
 
     def test_single_loop_with_children(self):
         # [N1, N2, N3] → [Loop(N1, N2, N3)]
@@ -323,16 +335,16 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "N1*CA~N2*Name~N3*Addr~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.parse()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string)
 
-        self.assertEqual(len(result), 1)
-        self.assertIsInstance(result[0], ParsedLoop)
-        self.assertEqual(result[0].loop_id, "N1")
-        self.assertEqual(len(result[0].segments), 3)
-        self.assertEqual(result[0].segments[0].segment_id, "N1")
-        self.assertEqual(result[0].segments[1].segment_id, "N2")
-        self.assertEqual(result[0].segments[2].segment_id, "N3")
+        self.assertEqual(len(result.segments), 1)
+        self.assertIsInstance(result.segments[0], ParsedLoop)
+        self.assertEqual(result.segments[0].loop_id, "N1")
+        self.assertEqual(len(result.segments[0].segments), 3)
+        self.assertEqual(result.segments[0].segments[0].segment_id, "N1")
+        self.assertEqual(result.segments[0].segments[1].segment_id, "N2")
+        self.assertEqual(result.segments[0].segments[2].segment_id, "N3")
 
     def test_consecutive_loop_starts(self):
         # [N1, N1] → [Loop(N1), Loop(N1)]
@@ -341,14 +353,14 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "N1*CA~N1*SH~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.parse()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string)
 
-        self.assertEqual(len(result), 2)
-        self.assertIsInstance(result[0], ParsedLoop)
-        self.assertIsInstance(result[1], ParsedLoop)
-        self.assertEqual(len(result[0].segments), 1)
-        self.assertEqual(len(result[1].segments), 1)
+        self.assertEqual(len(result.segments), 2)
+        self.assertIsInstance(result.segments[0], ParsedLoop)
+        self.assertIsInstance(result.segments[1], ParsedLoop)
+        self.assertEqual(len(result.segments[0].segments), 1)
+        self.assertEqual(len(result.segments[1].segments), 1)
 
     def test_loop_terminated_by_non_child(self):
         # [N1, N2, B] → [Loop(N1, N2), B]
@@ -358,14 +370,14 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "N1*CA~N2*Name~B*y~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.parse()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string)
 
-        self.assertEqual(len(result), 2)
-        self.assertIsInstance(result[0], ParsedLoop)
-        self.assertEqual(len(result[0].segments), 2)
-        self.assertIsInstance(result[1], ParsedSegment)
-        self.assertEqual(result[1].segment_id, "B")
+        self.assertEqual(len(result.segments), 2)
+        self.assertIsInstance(result.segments[0], ParsedLoop)
+        self.assertEqual(len(result.segments[0].segments), 2)
+        self.assertIsInstance(result.segments[1], ParsedSegment)
+        self.assertEqual(result.segments[1].segment_id, "B")
 
     def test_loop_terminated_by_different_loop(self):
         # [N1, N2, LX, N7] → [Loop(N1, N2), Loop(LX, N7)]
@@ -377,16 +389,16 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "N1*CA~N2*Name~LX*1~N7*HLCU~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.parse()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string)
 
-        self.assertEqual(len(result), 2)
-        self.assertIsInstance(result[0], ParsedLoop)
-        self.assertEqual(result[0].loop_id, "N1")
-        self.assertEqual(len(result[0].segments), 2)
-        self.assertIsInstance(result[1], ParsedLoop)
-        self.assertEqual(result[1].loop_id, "LX")
-        self.assertEqual(len(result[1].segments), 2)
+        self.assertEqual(len(result.segments), 2)
+        self.assertIsInstance(result.segments[0], ParsedLoop)
+        self.assertEqual(result.segments[0].loop_id, "N1")
+        self.assertEqual(len(result.segments[0].segments), 2)
+        self.assertIsInstance(result.segments[1], ParsedLoop)
+        self.assertEqual(result.segments[1].loop_id, "LX")
+        self.assertEqual(len(result.segments[1].segments), 2)
 
     def test_orphan_child_emitted_flat(self):
         # [N2, N1, N2] → [N2, Loop(N1, N2)]
@@ -395,14 +407,14 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "N2*orphan~N1*CA~N2*child~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.parse()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string)
 
-        self.assertEqual(len(result), 2)
-        self.assertIsInstance(result[0], ParsedSegment)
-        self.assertEqual(result[0].segment_id, "N2")
-        self.assertIsInstance(result[1], ParsedLoop)
-        self.assertEqual(len(result[1].segments), 2)
+        self.assertEqual(len(result.segments), 2)
+        self.assertIsInstance(result.segments[0], ParsedSegment)
+        self.assertEqual(result.segments[0].segment_id, "N2")
+        self.assertIsInstance(result.segments[1], ParsedLoop)
+        self.assertEqual(len(result.segments[1].segments), 2)
 
     def test_to_dict_mixed_output(self):
         registry = self._make_registry(
@@ -411,8 +423,8 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "A*x~N1*CA~N2*Name~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result = parser.to_dict()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(x12_string).to_dict()
 
         self.assertIn('segment_id', result['segments'][0])
         self.assertEqual(result['segments'][0]['segment_id'], 'A')
@@ -426,22 +438,24 @@ class TestX12ParserWithLoops(TestCase):
         )
         x12_string = "A*x~N1*CA~N2*Name~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        json_output = parser.to_json()
+        parser = X12Parser(registry=registry)
+        json_output = parser.parse(x12_string).to_json()
 
         data = json.loads(json_output)
         self.assertIn('segments', data)
         self.assertEqual(len(data['segments']), 2)
         self.assertEqual(data['segments'][1]['loop_id'], 'N1')
 
-    def test_parse_caches_with_loops(self):
+    def test_parser_reusable_with_loops(self):
         registry = self._make_registry(
             loop_defs=[LoopDefinition(_SegN1, [_SegN2])],
         )
-        x12_string = "N1*CA~N2*Name~"
 
-        parser = X12Parser(x12_string, registry=registry)
-        result1 = parser.parse()
-        result2 = parser.parse()
+        parser = X12Parser(registry=registry)
+        result1 = parser.parse("N1*CA~N2*Name~")
+        result2 = parser.parse("N1*SH~")
 
-        self.assertIs(result1, result2)
+        self.assertEqual(len(result1.segments), 1)
+        self.assertEqual(len(result1.segments[0].segments), 2)
+        self.assertEqual(len(result2.segments), 1)
+        self.assertEqual(len(result2.segments[0].segments), 1)

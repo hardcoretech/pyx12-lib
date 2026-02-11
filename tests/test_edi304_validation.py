@@ -830,8 +830,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_full_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        result = parser.to_dict()
+        parser = X12Parser(registry=registry)
+        result = parser.parse(self.FULL_EDI_304).to_dict()
 
         segment_ids = [s['segment_id'] for s in result['segments']]
         self.assertEqual(segment_ids, [
@@ -852,23 +852,23 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_full_document_segment_count(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         self.assertEqual(len(segments), 39)
 
     def test_parse_full_document_to_json(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        json_output = parser.to_json()
+        parser = X12Parser(registry=registry)
+        json_output = parser.parse(self.FULL_EDI_304).to_json()
 
         data = json.loads(json_output)
         self.assertEqual(len(data['segments']), 39)
 
     def test_parse_b2_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         b2 = segments[3]
         self.assertEqual(b2.segment_id, 'B2')
@@ -880,8 +880,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_v1_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         v1 = [s for s in segments if s.segment_id == 'V1'][0]
         ref_map = {e['reference_designator']: e['value'] for e in v1.to_dict()['elements']}
@@ -893,8 +893,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_n9_segments_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         n9_segments = [s for s in segments if s.segment_id == 'N9']
         self.assertEqual(len(n9_segments), 4)
@@ -906,8 +906,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_n1_segments_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         n1_segments = [s for s in segments if s.segment_id == 'N1']
         self.assertEqual(len(n1_segments), 4)
@@ -919,8 +919,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_r4_ports_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         r4_segments = [s for s in segments if s.segment_id == 'R4']
         self.assertEqual(len(r4_segments), 4)
@@ -932,8 +932,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_lx_containers_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         lx_segments = [s for s in segments if s.segment_id == 'LX']
         self.assertEqual(len(lx_segments), 2)
@@ -942,8 +942,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_n7_equipment_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         n7_segments = [s for s in segments if s.segment_id == 'N7']
         self.assertEqual(len(n7_segments), 2)
@@ -961,8 +961,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_parse_l3_totals_from_document(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         l3 = [s for s in segments if s.segment_id == 'L3'][0]
         ref_map = {e['reference_designator']: e['value'] for e in l3.to_dict()['elements']}
@@ -975,8 +975,8 @@ class TestFullEdi304DocumentParsing(TestCase):
 
     def test_document_all_segments_valid(self):
         registry = _make_edi304_registry()
-        parser = X12Parser(self.FULL_EDI_304, registry=registry)
-        segments = parser.parse()
+        parser = X12Parser(registry=registry)
+        segments = parser.parse(self.FULL_EDI_304).segments
 
         for seg in segments:
             self.assertTrue(
@@ -1056,8 +1056,9 @@ class TestFullEdi304LoopParsing(TestCase):
 
     def setUp(self):
         self.registry = _make_edi304_loop_registry()
-        self.parser = X12Parser(self.FULL_EDI_304_WITH_LOOPS, registry=self.registry)
-        self.result = self.parser.parse()
+        parser = X12Parser(registry=self.registry)
+        self.parse_result = parser.parse(self.FULL_EDI_304_WITH_LOOPS)
+        self.result = self.parse_result.segments
 
     def test_loop_parse_top_level_item_count(self):
         # ISA, GS, ST, B2, B2A, 5x N9, V1 = 11 flat
@@ -1142,17 +1143,17 @@ class TestFullEdi304LoopParsing(TestCase):
             self.assertEqual(len(matches), 1, msg='Expected 1 {} segment, got {}'.format(env_id, len(matches)))
 
     def test_to_dict_loop_items_have_loop_id(self):
-        result_dict = self.parser.to_dict()
+        result_dict = self.parse_result.to_dict()
         loop_items = [item for item in result_dict['segments'] if 'loop_id' in item]
         self.assertEqual(len(loop_items), 6)  # 5 N1 + 1 LX
 
     def test_to_dict_flat_items_have_segment_id(self):
-        result_dict = self.parser.to_dict()
+        result_dict = self.parse_result.to_dict()
         flat_items = [item for item in result_dict['segments'] if 'segment_id' in item]
         self.assertEqual(len(flat_items), 23)  # 29 total - 6 loops
 
     def test_to_json_round_trip(self):
-        json_output = self.parser.to_json()
+        json_output = self.parse_result.to_json()
         data = json.loads(json_output)
         self.assertIn('segments', data)
         self.assertEqual(len(data['segments']), 29)
