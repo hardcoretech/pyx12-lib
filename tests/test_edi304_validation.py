@@ -12,6 +12,8 @@ Segment types: B2, B2A, K1, L0, L3, PWK, SAC, LX, L4, L5, M0,
 import json
 from unittest import TestCase
 
+from pyx12lib.core.grammar.loop import LoopDefinition
+from pyx12lib.core.parsed import ParsedLoop, ParsedSegment
 from pyx12lib.core.parser import SegmentParser, X12Parser
 from pyx12lib.core.registry import GrammarRegistry, create_default_registry
 
@@ -981,3 +983,176 @@ class TestFullEdi304DocumentParsing(TestCase):
                 seg.is_valid(),
                 msg='Segment {} is not valid'.format(seg.segment_id),
             )
+
+
+def _make_edi304_loop_registry():
+    """Create a registry with EDI 304 segments and loop definitions."""
+    registry = create_default_registry()
+    registry.register_all([
+        B2Segment, B2aSegment, N9Segment, V1Segment,
+        R4Segment, R2Segment, L3Segment, PWKSegment,
+    ])
+    registry.register_loop(
+        LoopDefinition(N1Segment, [N2Segment, N3Segment, N4Segment, G61Segment])
+    )
+    registry.register_loop(
+        LoopDefinition(LxSegment, [N7Segment, QtySegment, M7Segment, L0Segment, L5Segment])
+    )
+    return registry
+
+
+class TestFullEdi304LoopParsing(TestCase):
+    """Parse an EDI 304 document with loop definitions applied.
+
+    Uses a different X12 string from TestFullEdi304DocumentParsing to
+    provide complementary coverage — N1 with N2 children, single LX
+    with multiple containers, PWK segments instead of K1.
+    """
+
+    FULL_EDI_304_WITH_LOOPS = (
+        'ISA*00*          *00*          *ZZ*GOFREIGHT      *ZZ*CARGOSMART     *240115*1030*^*00401*000000001*0*P*^~'
+        'GS*SO*CARGOSMART*GOFREIGHT*20240115*1030*1*X*004010~'
+        'ST*304*123456789~'
+        'B2*PP*EGLV**OE-25120002**MX**2~'
+        'B2A*00~'
+        'N9*BM*123324~'
+        'N9*BN*12334~'
+        'N9*CT*QWER~'
+        'N9*SI*OE-25120002~'
+        'N9*TN*12345~'
+        'V1**PACIFIC VOYAGER**1234*EGLV~'
+        'N1*CA*EGLV~'
+        'N1*SH*ACME EXPORTS INC~'
+        'N1*CN*TERMINAL WEST PORT~'
+        'N2*100 DOCK STREET~'
+        'N2*PORTSIDE 100 BC CA~'
+        'N1*FW*TERMINAL WEST PORT~'
+        'N2*100 DOCK STREET~'
+        'N2*PORTSIDE 100 BC CA~'
+        'N1*SI*ACME EXPORTS INC*25*12345~'
+        'G61*IC*JANE SMITH*EM*contact@acme-exports.test~'
+        'R4*R*UN*US2AA~'
+        'R4*D*UN*US267~'
+        'R4*L*UN*US267~'
+        'R4*E*UN*US2AA~'
+        'R4*W*UN*US267~'
+        'R2*EGLV*O**********02~'
+        'LX*000001~'
+        'N7**12*1*G*4200***22*E*S*******K*7****22G0~'
+        'QTY*39*100~'
+        'M7*12321*1231***SH~'
+        'N7**2234*100*G*4200***22*E*S*******K*7****22G0~'
+        'QTY*39*100~'
+        'M7*32123*12345***SH~'
+        'L0*001***101*G*100*X*200*CTN**K~'
+        'L5*001*TEST DESC****TEST MARK~'
+        'L3*101*G*******100*X*200*K~'
+        'PWK*BC*EI*5~'
+        'PWK*BL*EI*3~'
+        'SE*38*123456789~'
+        'GE*1*123456789~'
+        'IEA*1*000000001~'
+    )
+
+    def setUp(self):
+        self.registry = _make_edi304_loop_registry()
+        self.parser = X12Parser(self.FULL_EDI_304_WITH_LOOPS, registry=self.registry)
+        self.result = self.parser.parse()
+
+    def test_loop_parse_top_level_item_count(self):
+        # ISA, GS, ST, B2, B2A, 5x N9, V1 = 11 flat
+        # 5x N1 loops = 5 loops
+        # 5x R4, R2 = 6 flat
+        # 1x LX loop = 1 loop
+        # L3, 2x PWK, SE, GE, IEA = 6 flat
+        # Total = 11 + 5 + 6 + 1 + 6 = 29
+        self.assertEqual(len(self.result), 29)
+
+    def test_loop_parse_n1_loop_count(self):
+        n1_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'N1']
+        self.assertEqual(len(n1_loops), 5)
+
+    def test_loop_n1_ca_has_no_children(self):
+        n1_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'N1']
+        ca_loop = n1_loops[0]
+        self.assertEqual(len(ca_loop.segments), 1)
+        self.assertEqual(ca_loop.segments[0].segment_id, 'N1')
+
+    def test_loop_n1_cn_has_two_n2(self):
+        n1_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'N1']
+        cn_loop = n1_loops[2]  # CA, SH, CN
+        self.assertEqual(len(cn_loop.segments), 3)
+        self.assertEqual(cn_loop.segments[0].segment_id, 'N1')
+        self.assertEqual(cn_loop.segments[1].segment_id, 'N2')
+        self.assertEqual(cn_loop.segments[2].segment_id, 'N2')
+
+    def test_loop_n1_si_has_g61(self):
+        n1_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'N1']
+        si_loop = n1_loops[4]  # CA, SH, CN, FW, SI
+        self.assertEqual(len(si_loop.segments), 2)
+        self.assertEqual(si_loop.segments[0].segment_id, 'N1')
+        self.assertEqual(si_loop.segments[1].segment_id, 'G61')
+
+    def test_loop_n1_entity_codes(self):
+        n1_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'N1']
+        entity_codes = []
+        for loop in n1_loops:
+            n1_seg = loop.segments[0]
+            code = n1_seg.to_dict()['elements'][0]['value']
+            entity_codes.append(code)
+        self.assertEqual(entity_codes, ['CA', 'SH', 'CN', 'FW', 'SI'])
+
+    def test_loop_lx_count(self):
+        lx_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'LX']
+        self.assertEqual(len(lx_loops), 1)
+
+    def test_loop_lx_contains_all_children(self):
+        lx_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'LX']
+        lx_loop = lx_loops[0]
+        self.assertEqual(len(lx_loop.segments), 9)
+        seg_ids = [s.segment_id for s in lx_loop.segments]
+        self.assertEqual(seg_ids, ['LX', 'N7', 'QTY', 'M7', 'N7', 'QTY', 'M7', 'L0', 'L5'])
+
+    def test_loop_lx_two_containers(self):
+        lx_loops = [item for item in self.result if isinstance(item, ParsedLoop) and item.loop_id == 'LX']
+        lx_loop = lx_loops[0]
+        n7_segments = [s for s in lx_loop.segments if s.segment_id == 'N7']
+        self.assertEqual(len(n7_segments), 2)
+
+    def test_r4_segments_are_flat(self):
+        r4_items = [item for item in self.result if isinstance(item, ParsedSegment) and item.segment_id == 'R4']
+        self.assertEqual(len(r4_items), 5)
+
+    def test_l3_after_lx_loop_is_flat(self):
+        l3_items = [item for item in self.result if isinstance(item, ParsedSegment) and item.segment_id == 'L3']
+        self.assertEqual(len(l3_items), 1)
+
+    def test_pwk_after_l3_are_flat(self):
+        pwk_items = [item for item in self.result if isinstance(item, ParsedSegment) and item.segment_id == 'PWK']
+        self.assertEqual(len(pwk_items), 2)
+
+    def test_n9_segments_before_loops_are_flat(self):
+        n9_items = [item for item in self.result if isinstance(item, ParsedSegment) and item.segment_id == 'N9']
+        self.assertEqual(len(n9_items), 5)
+
+    def test_envelope_segments_unaffected(self):
+        envelope_ids = ['ISA', 'GS', 'ST', 'SE', 'GE', 'IEA']
+        for env_id in envelope_ids:
+            matches = [item for item in self.result if isinstance(item, ParsedSegment) and item.segment_id == env_id]
+            self.assertEqual(len(matches), 1, msg='Expected 1 {} segment, got {}'.format(env_id, len(matches)))
+
+    def test_to_dict_loop_items_have_loop_id(self):
+        result_dict = self.parser.to_dict()
+        loop_items = [item for item in result_dict['segments'] if 'loop_id' in item]
+        self.assertEqual(len(loop_items), 6)  # 5 N1 + 1 LX
+
+    def test_to_dict_flat_items_have_segment_id(self):
+        result_dict = self.parser.to_dict()
+        flat_items = [item for item in result_dict['segments'] if 'segment_id' in item]
+        self.assertEqual(len(flat_items), 23)  # 29 total - 6 loops
+
+    def test_to_json_round_trip(self):
+        json_output = self.parser.to_json()
+        data = json.loads(json_output)
+        self.assertIn('segments', data)
+        self.assertEqual(len(data['segments']), 29)

@@ -1,3 +1,4 @@
+from pyx12lib.core.grammar.loop import LoopDefinition
 from pyx12lib.core.parser import SegmentParser, X12Parser
 from pyx12lib.core.registry import GrammarRegistry, create_default_registry
 from pyx12lib.core.delimiters import detect_delimiters, Delimiters

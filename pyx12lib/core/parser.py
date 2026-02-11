@@ -4,6 +4,7 @@ from pyx12lib.core.parsed import (
     ParsedElement,
     ParsedComponent,
     ParsedCompositeElement,
+    ParsedLoop,
     ParsedSegment,
 )
 from pyx12lib.core.grammar.element import (
@@ -129,7 +130,7 @@ class X12Parser(BaseSegmentParser):
         if self._parsed_segments is not None:
             return self._parsed_segments
 
-        segments = []
+        flat_segments = []
         raw_segments = self._x12_string.split(self._segment_terminator)
 
         for raw in raw_segments:
@@ -149,10 +150,47 @@ class X12Parser(BaseSegmentParser):
                 element_delimiter=self._element_delimiter,
                 component_delimiter=self._component_delimiter,
             )
-            segments.append(parser.parse())
+            flat_segments.append(parser.parse())
 
-        self._parsed_segments = segments
-        return segments
+        if self._registry.has_loops:
+            self._parsed_segments = self._organize_into_loops(flat_segments)
+        else:
+            self._parsed_segments = flat_segments
+
+        return self._parsed_segments
+
+    def _organize_into_loops(self, flat_segments):
+        """Group flat segments into ParsedLoop objects based on registry loop definitions."""
+        result = []
+        current_loop = None
+        current_loop_def = None
+
+        for segment in flat_segments:
+            seg_id = segment.segment_id
+            loop_def = self._registry.get_loop(seg_id)
+
+            if loop_def is not None:
+                # This segment starts a new loop.
+                if current_loop is not None:
+                    result.append(current_loop)
+                current_loop = ParsedLoop(loop_id=loop_def.loop_id)
+                current_loop.add_segment(segment)
+                current_loop_def = loop_def
+
+            elif current_loop is not None and current_loop_def.is_child(seg_id):
+                current_loop.add_segment(segment)
+
+            else:
+                if current_loop is not None:
+                    result.append(current_loop)
+                    current_loop = None
+                    current_loop_def = None
+                result.append(segment)
+
+        if current_loop is not None:
+            result.append(current_loop)
+
+        return result
 
     def to_dict(self):
         return {
