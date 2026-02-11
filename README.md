@@ -126,6 +126,46 @@ parser = X12Parser("MY*hello~MY*world~", registry=registry)
 data = parser.to_dict()
 ```
 
+* Parse with loop definitions to group related segments.
+```python
+from pyx12lib import X12Parser, LoopDefinition, GrammarRegistry
+from pyx12lib.core.grammar import BaseSegment, Element, element, segment
+
+class N1Segment(BaseSegment):
+    segment_id = 'N1'
+    usage = segment.USAGE_OPTIONAL
+    max_use = 99
+    elements = (
+        Element(reference_designator='N101', name='Entity Identifier Code',
+                usage=element.USAGE_MANDATORY, element_type=element.ELEMENT_TYPE_ID,
+                minimum=2, maximum=3),
+    )
+
+class N2Segment(BaseSegment):
+    segment_id = 'N2'
+    usage = segment.USAGE_OPTIONAL
+    max_use = 2
+    elements = (
+        Element(reference_designator='N201', name='Name',
+                usage=element.USAGE_MANDATORY, element_type=element.ELEMENT_TYPE_STRING,
+                minimum=1, maximum=35),
+    )
+
+registry = GrammarRegistry()
+registry.register_loop(LoopDefinition(N1Segment, [N2Segment]))
+
+parser = X12Parser("N1*CA~N1*SH~N2*ACME CORP~N1*CN~", registry=registry)
+data = parser.to_dict()
+# {'segments': [
+#     {'loop_id': 'N1', 'segments': [{'segment_id': 'N1', 'elements': [...]}]},
+#     {'loop_id': 'N1', 'segments': [
+#         {'segment_id': 'N1', 'elements': [...]},
+#         {'segment_id': 'N2', 'elements': [...]},
+#     ]},
+#     {'loop_id': 'N1', 'segments': [{'segment_id': 'N1', 'elements': [...]}]},
+# ]}
+```
+
 * Auto-detect delimiters from ISA header.
 ```python
 from pyx12lib import parse_x12

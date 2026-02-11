@@ -13,6 +13,10 @@ Changes:
 - Add `ParsedSegment`, `ParsedElement`, `ParsedCompositeElement`, `ParsedComponent`, `ParsedLoop` data structures.
 - Add `detect_delimiters()` for automatic ISA delimiter detection.
 - Add `parse_x12()` and `parse_x12_to_json()` convenience functions.
+- Add `LoopDefinition` for defining loop structures (start segment + children).
+- Add loop-aware parsing: `X12Parser` groups segments into `ParsedLoop` objects when loop definitions are registered.
+- Add `GrammarRegistry.register_loop()` which auto-registers all segment grammars in a loop definition.
+- Add `GrammarRegistry.register_all()` for batch segment registration.
 
 0.3
 -----
