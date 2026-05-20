@@ -1,0 +1,55 @@
+name: Validate Renovate Config
+
+# Triggers on any path Renovate would pick up as a config (see lookup order:
+# https://docs.renovatebot.com/configuration-options/#configurationoptions).
+# Listing them all means a PR can't accidentally bypass validation by adding,
+# say, a higher-precedence `renovate.json` while only the `.json5` is path-filtered.
+on:
+  pull_request:
+    paths:
+      - 'renovate.json'
+      - 'renovate.json5'
+      - '.renovaterc'
+      - '.renovaterc.json'
+      - '.github/renovate.json'
+      - '.github/renovate.json5'
+      - '.github/workflows/validate-renovate.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'renovate.json'
+      - 'renovate.json5'
+      - '.renovaterc'
+      - '.renovaterc.json'
+      - '.github/renovate.json'
+      - '.github/renovate.json5'
+      - '.github/workflows/validate-renovate.yml'
+
+jobs:
+  validate:
+    name: renovate-config-validator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # We've deliberately chosen `renovate.json5` (supports comments). Any
+      # higher-precedence config file (`renovate.json`, `.renovaterc`,
+      # `.github/renovate.json`) would silently override it — fail loudly
+      # so a stray file is caught at PR time.
+      - name: Refuse higher-precedence config files
+        run: |
+          higher_precedence=(renovate.json .renovaterc .renovaterc.json .github/renovate.json)
+          found=()
+          for f in "${higher_precedence[@]}"; do
+            [[ -f "$f" ]] && found+=("$f")
+          done
+          if (( ${#found[@]} > 0 )); then
+            echo "::error::Higher-precedence Renovate config file(s) present — these override renovate.json5: ${found[*]}"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - run: npx --yes --package renovate@43 -- renovate-config-validator --strict --no-global renovate.json5
