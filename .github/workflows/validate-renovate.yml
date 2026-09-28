@@ -30,7 +30,7 @@ jobs:
     name: renovate-config-validator
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # We've deliberately chosen `renovate.json5` (supports comments). Any
       # higher-precedence config file (`renovate.json`, `.renovaterc`,
